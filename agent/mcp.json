@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "linear": {
+      "url": "https://mcp.linear.app/mcp"
+    },
+    "appsignal": {
+      "url": "https://appsignal.com/api/mcp"
+    }
+  }
+}

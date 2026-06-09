@@ -1,0 +1,18 @@
+# Secrets / credentials (do not commit)
+agent/auth.json
+agent/mcp-oauth/
+
+# Session transcripts can contain sensitive data and are large/noisy
+agent/sessions/
+
+# Generated caches and trust-local state
+agent/mcp-cache.json
+agent/trust.json
+
+# Installed packages and cloned package checkouts
+agent/npm/node_modules/
+agent/git/
+
+# OS/editor noise
+.DS_Store
+*.swp

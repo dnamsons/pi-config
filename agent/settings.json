@@ -1,0 +1,20 @@
+{
+  "lastChangelogVersion": "0.79.0",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "xhigh",
+  "packages": [
+    "npm:pi-mcp-adapter",
+    "npm:pi-web-access"
+  ],
+  "theme": "kimbie",
+  "piVim": {
+    "clipboardMirror": "all",
+    "modeColors": {
+      "insert": "vimInsert",
+      "normal": "vimNormal",
+      "ex": "vimEx"
+    },
+    "syncBorderColorWithMode": false
+  }
+}
