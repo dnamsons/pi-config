@@ -1,5 +1,6 @@
 # Secrets / credentials (do not commit)
 agent/auth.json
+agent/mcp.json
 agent/mcp-oauth/
 
 # Session transcripts can contain sensitive data and are large/noisy
