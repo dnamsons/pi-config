@@ -11,16 +11,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-type LumenDiffResult = {
+type TuicrResult = {
   stdout: string;
+  stderr: string;
   exitCode: number;
   signal: NodeJS.Signals | null;
   error?: string;
 };
 
-function buildLumenCommand(args: string): string {
+function buildTuicrCommand(args: string): string {
   const trimmed = args.trim();
-  return trimmed ? `lumen diff ${trimmed}` : "lumen diff";
+  return trimmed ? `tuicr --stdout ${trimmed}` : "tuicr --stdout -w";
 }
 
 function errorMessage(error: unknown): string {
@@ -39,24 +40,33 @@ function stripTerminalControls(value: string): string {
     .trim();
 }
 
+function relevantStderr(value: string): string {
+  return stripTerminalControls(value)
+    .split("\n")
+    .filter((line) => !line.startsWith("tuicr-session:"))
+    .join("\n")
+    .trim();
+}
+
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("diff", {
     description:
-      "Review the git diff with lumen and send captured annotations to the agent",
+      "Review changes with tuicr and add exported comments to the editor",
     handler: async (args, ctx) => {
       await ctx.waitForIdle();
 
-      if (!ctx.hasUI) {
+      if (ctx.mode !== "tui") {
         ctx.ui.notify("/diff requires interactive pi", "error");
         return;
       }
 
-      const command = buildLumenCommand(args);
-      const tempDir = mkdtempSync(join(tmpdir(), "pi-lumen-diff-"));
-      const annotationsPath = join(tempDir, "annotations.txt");
+      const command = buildTuicrCommand(args);
+      const tempDir = mkdtempSync(join(tmpdir(), "pi-tuicr-diff-"));
+      const reviewPath = join(tempDir, "review.md");
+      const stderrPath = join(tempDir, "stderr.txt");
 
       try {
-        const result = await ctx.ui.custom<LumenDiffResult>(
+        const result = await ctx.ui.custom<TuicrResult>(
           (tui, _theme, _keybindings, done) => {
             let settled = false;
             let ttyFd: number | undefined;
@@ -64,19 +74,24 @@ export default function (pi: ExtensionAPI) {
 
             const emptyComponent = { render: () => [], invalidate: () => {} };
 
-            const finish = (value: Omit<LumenDiffResult, "stdout">) => {
+            const finish = (value: Omit<TuicrResult, "stdout" | "stderr">) => {
               if (settled) return;
               settled = true;
 
               let stdout = "";
+              let stderr = "";
+
               try {
-                if (existsSync(annotationsPath)) {
-                  stdout = readFileSync(annotationsPath, "utf8");
+                if (existsSync(reviewPath)) {
+                  stdout = readFileSync(reviewPath, "utf8");
+                }
+                if (existsSync(stderrPath)) {
+                  stderr = readFileSync(stderrPath, "utf8");
                 }
               } catch (error) {
                 value = {
                   ...value,
-                  error: `Unable to read lumen annotations: ${errorMessage(error)}`,
+                  error: `Unable to read tuicr output: ${errorMessage(error)}`,
                 };
               }
 
@@ -93,7 +108,7 @@ export default function (pi: ExtensionAPI) {
                 tui.requestRender(true);
               }
 
-              done({ ...value, stdout });
+              done({ ...value, stdout, stderr });
             };
 
             try {
@@ -112,12 +127,15 @@ export default function (pi: ExtensionAPI) {
                 return emptyComponent;
               }
 
+              // Give tuicr its own pseudo-terminal. Merely attaching /dev/tty to
+              // a spawned process is not sufficient for every terminal/crossterm
+              // combination and can make tuicr exit immediately.
               const shell = process.env.SHELL || "/bin/sh";
-              const lumenCommand = `${command} > ${shellQuote(annotationsPath)}`;
+              const redirectedCommand = `${command} > ${shellQuote(reviewPath)} 2> ${shellQuote(stderrPath)}`;
               const scriptArgs =
                 process.platform === "darwin"
-                  ? ["-q", "-e", "/dev/null", shell, "-c", lumenCommand]
-                  : ["-q", "-e", "-c", lumenCommand, "/dev/null"];
+                  ? ["-q", "-e", "/dev/null", shell, "-c", redirectedCommand]
+                  : ["-q", "-e", "-c", redirectedCommand, "/dev/null"];
               const child = spawn("script", scriptArgs, {
                 cwd: ctx.cwd,
                 env: process.env,
@@ -150,31 +168,40 @@ export default function (pi: ExtensionAPI) {
           },
         );
 
+        const stderr = relevantStderr(result.stderr);
+
         if (result.error) {
-          ctx.ui.notify(`lumen diff failed: ${result.error}`, "error");
+          const details = stderr ? `: ${stderr}` : "";
+          ctx.ui.notify(`tuicr failed: ${result.error}${details}`, "error");
           return;
         }
 
-        const annotations = stripTerminalControls(result.stdout);
-        if (!annotations) {
-          const suffix =
-            result.exitCode === 0 ? "" : ` (exit ${result.exitCode})`;
+        const review = stripTerminalControls(result.stdout);
+        if (!review) {
+          const suffix = result.exitCode === 0 ? "" : ` (exit ${result.exitCode})`;
+          const details = stderr ? `: ${stderr}` : "";
           ctx.ui.notify(
-            `No lumen annotations emitted${suffix}.`,
+            `No tuicr review exported${suffix}${details}. Use y, :clip, or ZZ to export before exiting.`,
             result.exitCode === 0 ? "info" : "warning",
           );
           return;
         }
 
         if (result.exitCode !== 0) {
+          const details = stderr ? `: ${stderr}` : "";
           ctx.ui.notify(
-            `lumen diff exited with code ${result.exitCode}; sending captured annotations anyway.`,
+            `tuicr exited with code ${result.exitCode}${details}; adding captured output anyway.`,
             "warning",
           );
         }
 
-        pi.sendUserMessage(
-          `I reviewed the diff with lumen. Please address these annotations:\n\n${annotations}`,
+        const existingDraft = ctx.ui.getEditorText().trim();
+        ctx.ui.setEditorText(
+          existingDraft ? `${existingDraft}\n\n${review}` : review,
+        );
+        ctx.ui.notify(
+          "tuicr review added to the editor. Submit when ready.",
+          "info",
         );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
