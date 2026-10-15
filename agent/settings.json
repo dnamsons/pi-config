@@ -14,9 +14,9 @@
   "piVim": {
     "clipboardMirror": "all",
     "modeColors": {
-      "insert": "vimInsert",
-      "normal": "vimNormal",
-      "ex": "vimEx"
+      "insert": "success",
+      "normal": "text",
+      "ex": "error"
     },
     "syncBorderColorWithMode": false
   },

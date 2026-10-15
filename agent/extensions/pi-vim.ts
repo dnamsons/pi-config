@@ -1,6 +1,12 @@
 import { spawn, spawnSync } from "node:child_process";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { CustomEditor, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  CustomEditor,
+  getPackageDir,
+  type ExtensionAPI,
+} from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
   Key,
@@ -300,9 +306,9 @@ function isClipboardEnvironmentFailure(error: unknown): boolean {
   return error instanceof ClipboardSpawnError || isNodeSpawnErrno(error);
 }
 
-const PI_CODING_AGENT_MODULE_URL = import.meta.resolve(
-  "@earendil-works/pi-coding-agent",
-);
+const PI_CODING_AGENT_MODULE_URL = pathToFileURL(
+  join(getPackageDir(), "dist", "index.js"),
+).href;
 const CLIPBOARD_HELPER_SOURCE = `
 import { copyToClipboard } from ${JSON.stringify(PI_CODING_AGENT_MODULE_URL)};
 

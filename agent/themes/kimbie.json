@@ -70,9 +70,6 @@
 		"thinkingMedium": "#5f7e97",
 		"thinkingHigh": "#7e57c2",
 		"thinkingXhigh": "#c792ea",
-		"bashMode": "green",
-		"vimInsert": "green",
-		"vimNormal": "foreground",
-		"vimEx": "red"
+		"bashMode": "green"
 	}
 }
